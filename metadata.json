@@ -1,0 +1,5 @@
+{
+  "name": "PocketPlans",
+  "description": "A clean, mobile-first wishlist manager to organize future purchases. Replaces chat notes with a structured, offline-capable list supporting bilingual (English/Telugu) usage.",
+  "requestFramePermissions": []
+}

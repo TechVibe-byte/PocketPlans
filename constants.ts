@@ -1,0 +1,178 @@
+import { Category, Priority, Status, EcommercePlatform } from './types';
+
+// Security & Validation Constants
+export const VALIDATION_LIMITS = {
+  NAME_MAX_LENGTH: 100,
+  NOTES_MAX_LENGTH: 500,
+  PLATFORM_MAX_LENGTH: 50,
+  PRICE_MAX: 10000000, 
+  PRICE_MIN: 0,
+  URL_MAX_LENGTH: 2048,
+  RATE_LIMIT_MS: 2000, 
+};
+
+export const ALLOWED_PROTOCOLS = ['http:', 'https:'];
+
+export const TRANSLATIONS = {
+  en: {
+    appTitle: 'PocketPlans',
+    addItem: 'Add Item',
+    editItem: 'Edit Item',
+    searchPlaceholder: 'Search items...',
+    emptyState: 'No items found. Start by adding your first wish!',
+    total: 'Total',
+    count: 'Items',
+    export: 'Export CSV',
+    import: 'Import CSV',
+    importSuccess: 'Successfully imported {count} items.',
+    importError: 'Failed to import. Check file format.',
+    settings: 'Settings',
+    currency: 'Currency',
+    analytics: {
+      title: 'Analytics',
+      spendingByCategory: 'Spending by Category',
+      itemsByStatus: 'Items by Status',
+      costBreakdown: 'Cost Breakdown',
+    },
+    validation: {
+      required: 'This field is required',
+      tooLong: 'Character limit exceeded',
+      invalidUrl: 'Invalid URL (must start with http/https)',
+      invalidPrice: 'Invalid price',
+      rateLimit: 'Please wait a moment before trying again',
+    },
+    labels: {
+      name: 'Item Name',
+      category: 'Category',
+      price: 'Expected Price',
+      priority: 'Priority',
+      status: 'Status',
+      platform: 'E-commerce Site',
+      specifyPlatform: 'Specify Platform Name',
+      notes: 'Notes (Optional)',
+      link: 'Product Link (Optional)',
+      imageUrl: 'Image URL (Optional)',
+      visitLink: 'Visit',
+      save: 'Save Item',
+      cancel: 'Cancel',
+      delete: 'Delete',
+      deleteTitle: 'Delete Item',
+      confirmDelete: 'Are you sure you want to delete this item?',
+    },
+    categories: {
+      [Category.Gadgets]: 'Gadgets',
+      [Category.Home]: 'Home',
+      [Category.Travel]: 'Travel',
+      [Category.Courses]: 'Courses',
+      [Category.Personal]: 'Personal',
+      [Category.Others]: 'Others',
+    },
+    priorities: {
+      [Priority.High]: 'High',
+      [Priority.Medium]: 'Medium',
+      [Priority.Low]: 'Low',
+    },
+    statuses: {
+      [Status.Planned]: 'Planned',
+      [Status.Bought]: 'Bought',
+      [Status.Dropped]: 'Dropped',
+    },
+    platforms: {
+      [EcommercePlatform.Amazon]: 'Amazon',
+      [EcommercePlatform.Flipkart]: 'Flipkart',
+      [EcommercePlatform.Myntra]: 'Myntra',
+      [EcommercePlatform.Ajio]: 'Ajio',
+      [EcommercePlatform.Other]: 'Other',
+    },
+    filters: {
+      all: 'All',
+      sortBy: 'Sort By',
+      priceHigh: 'Price: High to Low',
+      priceLow: 'Price: Low to High',
+      newest: 'Newest First',
+    }
+  },
+  te: {
+    appTitle: 'పాకెట్ ప్లాన్స్',
+    addItem: 'కొత్త అంశం',
+    editItem: 'సవరించండి',
+    searchPlaceholder: 'వెతకండి...',
+    emptyState: 'అంశాలు లేవు. మీ మొదటి కోరికను జోడించండి!',
+    total: 'మొత్తం విలువ',
+    count: 'అంశాలు',
+    export: 'ఎగుమతి (Export)',
+    import: 'దిగుమతి (Import)',
+    importSuccess: '{count} అంశాలు విజయవంతంగా జోడించబడ్డాయి.',
+    importError: 'దిగుమతి విఫలమైంది. ఫైల్ సరిగ్గా ఉందో లేదో చూడండి.',
+    settings: 'సెట్టింగులు',
+    currency: 'కరెన్సీ',
+    analytics: {
+      title: 'విశ్లేషణ',
+      spendingByCategory: 'వర్గం వారీగా ఖర్చు',
+      itemsByStatus: 'స్థితి వారీగా అంశాలు',
+      costBreakdown: 'ఖర్చు వివరాలు',
+    },
+    validation: {
+      required: 'ఈ ఫీల్డ్ అవసరం',
+      tooLong: 'అక్షర పరిమితి దాటింది',
+      invalidUrl: 'సరైన URL ఇవ్వండి (http/https)',
+      invalidPrice: 'ధర చెల్లదు',
+      rateLimit: 'దయచేసి కాసేపు ఆగి ప్రయత్నించండి',
+    },
+    labels: {
+      name: 'అంశం పేరు',
+      category: 'వర్గం',
+      price: 'అంచనా ధర',
+      priority: 'ప్రాధాన్యత',
+      status: 'స్థితి',
+      platform: 'వెబ్సైట్ (E-commerce)',
+      specifyPlatform: 'వెబ్సైట్ పేరు వ్రాయండి',
+      notes: 'గమనికలు',
+      link: 'వస్తువు లింక్ (Optional)',
+      imageUrl: 'ఫోటో లింక్ (Optional)',
+      visitLink: 'లింక్',
+      save: 'భద్రపరచు',
+      cancel: 'రద్దు చేయి',
+      delete: 'తొలగించు',
+      deleteTitle: 'అంశాన్ని తొలగించు',
+      confirmDelete: 'మీరు ఖచ్చితంగా ఈ అంశాన్ని తొలగించాలనుకుంటున్నారా?',
+    },
+    categories: {
+      [Category.Gadgets]: 'ఎలక్ట్రానిక్స్',
+      [Category.Home]: 'ఇల్లు',
+      [Category.Travel]: 'ప్రయాణం',
+      [Category.Courses]: 'చదువు',
+      [Category.Personal]: 'వ్యక్తిగత',
+      [Category.Others]: 'ఇతరాలు',
+    },
+    priorities: {
+      [Priority.High]: 'అత్యవసరం',
+      [Priority.Medium]: 'మధ్యస్థం',
+      [Priority.Low]: 'సాధారణం',
+    },
+    statuses: {
+      [Status.Planned]: 'ప్రణాళికలో ఉంది',
+      [Status.Bought]: 'కొన్నారు',
+      [Status.Dropped]: 'విరమించుకున్నారు',
+    },
+    platforms: {
+      [EcommercePlatform.Amazon]: 'అమెజాన్ (Amazon)',
+      [EcommercePlatform.Flipkart]: 'ఫ్లిప్‌కార్ట్ (Flipkart)',
+      [EcommercePlatform.Myntra]: 'మింత్రా (Myntra)',
+      [EcommercePlatform.Ajio]: 'అజియో (Ajio)',
+      [EcommercePlatform.Other]: 'ఇతర (Other)',
+    },
+    filters: {
+      all: 'అన్నీ',
+      sortBy: 'క్రమబద్ధీకరించు',
+      priceHigh: 'ధర: ఎక్కువ నుండి తక్కువ',
+      priceLow: 'ధర: తక్కువ నుండి ఎక్కువ',
+      newest: 'కొత్తవి మొదట',
+    }
+  }
+};
+
+export const STORAGE_KEY = 'wishlog_items_v1';
+export const THEME_KEY = 'wishlog_theme_v1';
+export const LANG_KEY = 'wishlog_lang_v1';
+export const CURRENCY_KEY = 'wishlog_currency_v1';
