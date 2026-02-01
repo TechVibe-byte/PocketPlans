@@ -1,15 +1,19 @@
+
 import React, { useState, useEffect } from 'react';
 import { WishlistItem, Category, Priority, Status, EcommercePlatform } from '../types';
 import { VALIDATION_LIMITS, ALLOWED_PROTOCOLS } from '../constants';
 import { useSettings } from '../context/SettingsContext';
+import { useToast } from '../context/ToastContext';
 import { Button } from './ui/Button';
-import { X, Link as LinkIcon, AlertCircle, Image as ImageIcon } from 'lucide-react';
+import { X, Paperclip, AlertCircle, Image as ImageIcon, Sparkles, Loader2 } from 'lucide-react';
+import { GoogleGenAI, Type } from "@google/genai";
 
 interface ItemFormProps {
   initialData?: WishlistItem | null;
   isOpen: boolean;
   onClose: () => void;
   onSave: (item: Omit<WishlistItem, 'id' | 'createdAt' | 'updatedAt'>) => void;
+  onFetchChange?: (isFetching: boolean, itemId?: string) => void;
 }
 
 interface ValidationErrors {
@@ -21,8 +25,9 @@ interface ValidationErrors {
   notes?: string;
 }
 
-export const ItemForm: React.FC<ItemFormProps> = ({ initialData, isOpen, onClose, onSave }) => {
+export const ItemForm: React.FC<ItemFormProps> = ({ initialData, isOpen, onClose, onSave, onFetchChange }) => {
   const { t } = useSettings();
+  const { showToast } = useToast();
   
   const [name, setName] = useState('');
   const [category, setCategory] = useState<Category>(Category.Others);
@@ -34,6 +39,9 @@ export const ItemForm: React.FC<ItemFormProps> = ({ initialData, isOpen, onClose
   const [notes, setNotes] = useState('');
   const [link, setLink] = useState('');
   const [imageUrl, setImageUrl] = useState('');
+  
+  const [isFetching, setIsFetching] = useState(false);
+  const [fetchStatus, setFetchStatus] = useState<string>('');
   
   const [errors, setErrors] = useState<ValidationErrors>({});
 
@@ -75,6 +83,116 @@ export const ItemForm: React.FC<ItemFormProps> = ({ initialData, isOpen, onClose
   }, [initialData, isOpen]);
 
   if (!isOpen) return null;
+
+  const detectPlatformFromUrl = (url: string): string => {
+    const lowerUrl = url.toLowerCase();
+    if (lowerUrl.includes('amazon')) return 'Amazon';
+    if (lowerUrl.includes('flipkart')) return 'Flipkart';
+    if (lowerUrl.includes('myntra')) return 'Myntra';
+    if (lowerUrl.includes('ajio')) return 'Ajio';
+    try {
+      const hostname = new URL(url).hostname.replace('www.', '');
+      return hostname.charAt(0).toUpperCase() + hostname.slice(1).split('.')[0];
+    } catch {
+      return '';
+    }
+  };
+
+  const handleAutoFill = async () => {
+    // The API key must be obtained exclusively from the environment variable process.env.API_KEY.
+    const apiKey = process.env.API_KEY;
+    if (!apiKey) {
+      showToast(t.autoFillError, 'error');
+      return;
+    }
+    
+    if (!link) return;
+    
+    // Simple URL validation
+    try {
+      new URL(link);
+    } catch {
+      setErrors({ ...errors, link: t.validation.invalidUrl });
+      return;
+    }
+
+    setIsFetching(true);
+    onFetchChange?.(true, initialData?.id);
+    const platform = detectPlatformFromUrl(link);
+    setFetchStatus(platform ? `Connecting to ${platform}...` : 'Initializing AI...');
+
+    try {
+      // Always initialize with the pre-configured process.env.API_KEY.
+      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      
+      setFetchStatus(platform ? `Fetching details from ${platform}...` : 'Analyzing link content...');
+      const response = await ai.models.generateContent({
+        model: "gemini-3-flash-preview",
+        contents: `Analyze this product URL from an Indian e-commerce site: ${link}. 
+                   Extract the product Name and the current Price in INR.
+                   Return the price as a number (remove currency symbols like ₹).
+                   Identify the platform (Amazon, Flipkart, Myntra, Ajio, or Other).
+                   If you cannot access the specific page, perform a Google Search using the URL segments to find the exact product's current details in India.`,
+        config: {
+          tools: [{ googleSearch: {} }],
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              name: { type: Type.STRING },
+              price: { type: Type.NUMBER },
+              platform: { type: Type.STRING }
+            },
+            required: ["name", "price"]
+          },
+        },
+      });
+
+      setFetchStatus('Processing details...');
+      
+      // Access text directly from response object (getter property, not a function).
+      const text = response.text;
+      if (!text) throw new Error("Empty response from AI");
+
+      const data = JSON.parse(text);
+      if (data) {
+        if (data.name) setName(data.name);
+        if (data.price) setPrice(data.price.toString());
+        
+        if (data.platform) {
+          const lowerPlat = data.platform.toLowerCase();
+          if (lowerPlat.includes('amazon')) setPlatformType(EcommercePlatform.Amazon);
+          else if (lowerPlat.includes('flipkart')) setPlatformType(EcommercePlatform.Flipkart);
+          else if (lowerPlat.includes('myntra')) setPlatformType(EcommercePlatform.Myntra);
+          else if (lowerPlat.includes('ajio')) setPlatformType(EcommercePlatform.Ajio);
+          else {
+             setPlatformType(EcommercePlatform.Other);
+             setCustomPlatform(data.platform);
+          }
+        }
+        showToast(t.autoFillSuccess, "success");
+      }
+    } catch (e: any) {
+      console.error("Auto-fill failed", e);
+      let msg = "Could not auto-fill details.";
+
+      if (e.message?.includes('403') || e.message?.includes('API key')) {
+        msg = "Invalid API Key. Please check your settings.";
+      } else if (e.message?.includes('429')) {
+        msg = "Too many requests. Please wait a moment.";
+      } else if (e.message?.includes('503')) {
+        msg = "AI Service temporarily unavailable.";
+      } else if (e.name === 'SyntaxError') {
+        msg = "Could not parse product details.";
+      }
+
+      showToast(msg, "error");
+    } finally {
+      setIsFetching(false);
+      onFetchChange?.(false, initialData?.id);
+      setFetchStatus('');
+    }
+  };
 
   const validate = (): boolean => {
     const newErrors: ValidationErrors = {};
@@ -178,6 +296,42 @@ export const ItemForm: React.FC<ItemFormProps> = ({ initialData, isOpen, onClose
         </div>
 
         <form onSubmit={handleSubmit} className="p-5 space-y-5 flex-1">
+          
+          {/* Link Field First to encourage Auto-fill */}
+          <div>
+             <label className="block text-xs font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-1.5">{t.labels.link}</label>
+             <div className="relative flex gap-2">
+                <div className="relative flex-1 group">
+                    <div className="absolute left-2 top-1/2 -translate-y-1/2 w-8 h-8 flex items-center justify-center rounded-lg bg-white/60 dark:bg-black/40 border border-black/10 dark:border-white/10 text-gray-500 group-focus-within:text-blue-500 group-focus-within:border-blue-500/50 transition-all duration-300 shadow-sm backdrop-blur-sm">
+                        <Paperclip size={16} />
+                    </div>
+                    <input 
+                      type="url"
+                      value={link}
+                      onChange={(e) => setLink(e.target.value)}
+                      className={`w-full pl-12 pr-3 py-3 rounded-xl glass-input text-gray-900 dark:text-gray-100 placeholder-gray-400 focus:ring-2 focus:ring-blue-500/50 outline-none text-sm transition-all border border-transparent hover:border-white/20 dark:hover:border-white/10 ${errors.link ? 'border-red-500 focus:ring-red-500/50' : ''}`}
+                      placeholder="https://www.amazon.in/..."
+                    />
+                </div>
+                <button 
+                  type="button"
+                  onClick={handleAutoFill}
+                  disabled={!link || isFetching}
+                  className="px-3 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 text-white disabled:opacity-50 disabled:cursor-not-allowed shadow-md hover:shadow-lg transition-all flex items-center justify-center min-w-[3rem]"
+                  title="Auto-fill details from Link"
+                >
+                  {isFetching ? <Loader2 size={18} className="animate-spin" /> : <Sparkles size={18} />}
+                </button>
+             </div>
+             {errors.link && <p className="mt-1 text-xs text-red-500 flex items-center gap-1"><AlertCircle size={10} /> {errors.link}</p>}
+             {isFetching && !errors.link && (
+                <p className="mt-2 text-xs text-blue-600 dark:text-blue-400 flex items-center gap-2 animate-pulse font-medium">
+                   <Loader2 size={12} className="animate-spin" /> 
+                   {fetchStatus}
+                </p>
+             )}
+          </div>
+
           <div>
             <label className="block text-xs font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-1.5">{t.labels.name}</label>
             <input 
@@ -273,23 +427,6 @@ export const ItemForm: React.FC<ItemFormProps> = ({ initialData, isOpen, onClose
                 ))}
               </select>
             </div>
-          </div>
-
-          <div>
-             <label className="block text-xs font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-1.5">{t.labels.link}</label>
-             <div className="relative group">
-                <div className="absolute left-2 top-1/2 -translate-y-1/2 w-8 h-8 flex items-center justify-center rounded-lg bg-white/50 dark:bg-black/20 border border-black/5 dark:border-white/5 text-gray-400 group-focus-within:text-blue-500 group-focus-within:border-blue-500/30 transition-all duration-300">
-                    <LinkIcon size={16} />
-                </div>
-                <input 
-                  type="url"
-                  value={link}
-                  onChange={(e) => setLink(e.target.value)}
-                  className={`w-full pl-12 pr-3 py-3 rounded-xl glass-input text-gray-900 dark:text-gray-100 placeholder-gray-400 focus:ring-2 focus:ring-blue-500/50 outline-none text-sm transition-all border border-transparent hover:border-white/20 dark:hover:border-white/10 ${errors.link ? 'border-red-500 focus:ring-red-500/50' : ''}`}
-                  placeholder="https://example.com/product"
-                />
-             </div>
-             {errors.link && <p className="mt-1 text-xs text-red-500 flex items-center gap-1"><AlertCircle size={10} /> {errors.link}</p>}
           </div>
 
           <div>

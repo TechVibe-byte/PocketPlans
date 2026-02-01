@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo } from 'react';
 import { WishlistItem, Category, Status, FilterState, SortField, Priority, Currency } from './types';
 import { useWishlist } from './hooks/useWishlist';
@@ -10,7 +11,7 @@ import { ConfirmDialog } from './components/ConfirmDialog';
 import { Button } from './components/ui/Button';
 import { 
   Plus, Search, Filter, Download, Upload,
-  Languages, Moon, Sun, LayoutGrid, ListFilter, Globe, PieChart, List,
+  Languages, Moon, Sun, LayoutGrid, ListFilter, Settings, PieChart, List,
   WifiOff, Smartphone
 } from 'lucide-react';
 
@@ -30,6 +31,7 @@ const App: React.FC = () => {
   const [search, setSearch] = useState('');
   const [showFilters, setShowFilters] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [fetchingItemIds, setFetchingItemIds] = useState<Set<string>>(new Set());
   const [filters, setFilters] = useState<FilterState>({
     category: 'All',
     priority: 'All',
@@ -67,6 +69,16 @@ const App: React.FC = () => {
     setIsFormOpen(true);
   };
 
+  const handleFetchChange = (isFetching: boolean, itemId?: string) => {
+    if (!itemId) return;
+    setFetchingItemIds(prev => {
+      const next = new Set(prev);
+      if (isFetching) next.add(itemId);
+      else next.delete(itemId);
+      return next;
+    });
+  };
+
   const formattedTotal = stats.total.toLocaleString('en-US', { style: 'currency', currency: currency });
 
   return (
@@ -75,6 +87,7 @@ const App: React.FC = () => {
         type="file" 
         ref={fileInputRef} 
         onChange={handleFileUpload}
+        // Fixed casting error: Property 'value' does not exist on type 'HTMLImageElement'. Use HTMLInputElement.
         onClick={(e) => { (e.target as HTMLInputElement).value = ''; }}
         accept=".csv,text/csv,application/vnd.ms-excel,text/plain"
         className="hidden" 
@@ -126,7 +139,7 @@ const App: React.FC = () => {
               </div>
 
               <button onClick={() => setShowSettings(!showSettings)} className={`p-1.5 sm:p-2 rounded-full transition-colors ${showSettings ? 'bg-blue-500/20 text-blue-600' : 'hover:bg-black/5 dark:hover:bg-white/10'}`}>
-                 <Globe size={20} />
+                 <Settings size={20} />
               </button>
               <button onClick={toggleLanguage} className="p-1.5 sm:p-2 rounded-full hover:bg-black/5 dark:hover:bg-white/10 transition-colors">
                 <Languages size={20} />
@@ -138,7 +151,7 @@ const App: React.FC = () => {
           </div>
 
           {/* Settings Dropdown */}
-          <div className={`overflow-hidden transition-all duration-300 ${showSettings ? 'max-h-48 opacity-100 mb-3' : 'max-h-0 opacity-0'}`}>
+          <div className={`overflow-hidden transition-all duration-300 ${showSettings ? 'max-h-64 opacity-100 mb-3' : 'max-h-0 opacity-0'}`}>
              <div className="glass-panel p-3 rounded-xl space-y-3">
                 <div className="flex items-center justify-between">
                     <span className="text-sm font-medium">{t.currency}</span>
@@ -155,7 +168,7 @@ const App: React.FC = () => {
                 </div>
 
                 {showInstallButton && (
-                  <Button onClick={installApp} variant="primary" size="sm" fullWidth className="justify-center">
+                  <Button onClick={installApp} variant="primary" size="sm" fullWidth className="justify-center mt-2">
                     <Smartphone size={16} className="mr-2" /> Install App
                   </Button>
                 )}
@@ -268,6 +281,7 @@ const App: React.FC = () => {
                   item={item} 
                   onEdit={handleEdit}
                   onDelete={setItemToDelete}
+                  isLoading={fetchingItemIds.has(item.id)}
                 />
               ))
             )}
@@ -293,6 +307,7 @@ const App: React.FC = () => {
         onClose={() => setIsFormOpen(false)} 
         onSave={(data) => saveItem(data, editingItem?.id)}
         initialData={editingItem}
+        onFetchChange={handleFetchChange}
       />
 
       <ConfirmDialog 

@@ -1,3 +1,4 @@
+
 import { Category, Priority, Status, EcommercePlatform } from './types';
 
 // Security & Validation Constants
@@ -28,6 +29,9 @@ export const TRANSLATIONS = {
     importError: 'Failed to import. Check file format.',
     settings: 'Settings',
     currency: 'Currency',
+    autoFillError: 'Gemini API not configured correctly',
+    autoFillSuccess: 'Product details fetched successfully!',
+    fetching: 'Fetching...',
     analytics: {
       title: 'Analytics',
       spendingByCategory: 'Spending by Category',
@@ -106,6 +110,9 @@ export const TRANSLATIONS = {
     importError: 'దిగుమతి విఫలమైంది. ఫైల్ సరిగ్గా ఉందో లేదో చూడండి.',
     settings: 'సెట్టింగులు',
     currency: 'కరెన్సీ',
+    autoFillError: 'Gemini API సరిగ్గా పని చేయడం లేదు',
+    autoFillSuccess: 'వివరాలు సేకరించబడ్డాయి!',
+    fetching: 'సేకరిస్తోంది...',
     analytics: {
       title: 'విశ్లేషణ',
       spendingByCategory: 'వర్గం వారీగా ఖర్చు',
