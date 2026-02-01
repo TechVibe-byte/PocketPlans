@@ -1,4 +1,4 @@
-const CACHE_NAME = 'pocketplans-v1';
+const CACHE_NAME = 'pocketplans-v2'; // Incremented version
 const PRECACHE_URLS = [
   '/',
   '/index.html',
@@ -24,7 +24,7 @@ self.addEventListener('activate', (event) => {
           }
         })
       );
-    }).then(() => self.clients.claim()) // Take control of all clients immediately
+    }).then(() => self.clients.claim())
   );
 });
 
@@ -34,6 +34,26 @@ self.addEventListener('fetch', (event) => {
 
   // Skip non-GET requests and chrome-extension requests
   if (event.request.method !== 'GET' || url.protocol.startsWith('chrome-extension')) {
+    return;
+  }
+
+  // Handle navigation requests (HTML) specially
+  if (event.request.mode === 'navigate') {
+    event.respondWith(
+      caches.match('/index.html').then((cached) => {
+        // Return cached index.html if available, but also fetch from network to update cache
+        const fetchPromise = fetch(event.request).then((networkResponse) => {
+          if (networkResponse && networkResponse.status === 200) {
+            const responseToCache = networkResponse.clone();
+             caches.open(CACHE_NAME).then(cache => cache.put(event.request, responseToCache));
+          }
+          return networkResponse;
+        }).catch(() => {
+           // If offline and no cache, we might be in trouble, but if we have cached index.html above, we are good.
+        });
+        return cached || fetchPromise;
+      })
+    );
     return;
   }
 
@@ -52,8 +72,6 @@ self.addEventListener('fetch', (event) => {
         return networkResponse;
       }).catch((error) => {
         console.log('Network request failed, staying offline:', error);
-        // If network fails and we don't have a cache, we can't do much for new resources
-        // but existing cached resources will return the cachedResponse below.
       });
 
       // 3. Return cached response if available, otherwise wait for network

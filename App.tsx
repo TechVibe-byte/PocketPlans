@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { WishlistItem, Category, Status, FilterState, SortField, Priority, Currency } from './types';
 import { useWishlist } from './hooks/useWishlist';
 import { useSettings } from './context/SettingsContext';
+import { usePWA } from './hooks/usePWA';
 import { ItemForm } from './components/ItemForm';
 import { ItemCard } from './components/ItemCard';
 import { AnalyticsDashboard } from './components/AnalyticsDashboard';
@@ -9,7 +10,8 @@ import { ConfirmDialog } from './components/ConfirmDialog';
 import { Button } from './components/ui/Button';
 import { 
   Plus, Search, Filter, Download, Upload,
-  Languages, Moon, Sun, LayoutGrid, ListFilter, Globe, PieChart, List
+  Languages, Moon, Sun, LayoutGrid, ListFilter, Globe, PieChart, List,
+  WifiOff, Smartphone
 } from 'lucide-react';
 
 type ViewMode = 'list' | 'analytics';
@@ -18,6 +20,7 @@ const App: React.FC = () => {
   // Hooks & Context
   const { items, fileInputRef, saveItem, deleteItem, exportCSV, triggerImport, handleFileUpload } = useWishlist();
   const { theme, toggleTheme, toggleLanguage, t, currency, setCurrency } = useSettings();
+  const { isOffline, showInstallButton, installApp } = usePWA();
 
   // Local UI State
   const [view, setView] = useState<ViewMode>('list');
@@ -86,19 +89,28 @@ const App: React.FC = () => {
 
       {/* --- Header --- */}
       <header className="sticky top-0 z-30 bg-white/60 dark:bg-gray-900/60 backdrop-blur-xl border-b border-white/20 dark:border-white/5 shadow-sm">
-        <div className="max-w-3xl mx-auto px-4 py-3">
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-2">
-              <div className="p-2 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl text-white shadow-lg shadow-blue-500/30">
+        
+        {/* Offline Banner */}
+        {isOffline && (
+          <div className="bg-red-500 text-white text-xs font-bold text-center py-1 flex items-center justify-center gap-2 animate-in slide-in-from-top-0">
+             <WifiOff size={12} />
+             <span>Offline Mode - Changes saved locally</span>
+          </div>
+        )}
+
+        <div className="max-w-3xl mx-auto px-3 py-3">
+          <div className="flex items-center justify-between mb-3 gap-2">
+            <div className="flex items-center gap-2 min-w-0">
+              <div className="p-2 flex-shrink-0 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl text-white shadow-lg shadow-blue-500/30">
                 <LayoutGrid size={20} />
               </div>
-              <h1 className="text-xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
+              <h1 className="text-lg sm:text-xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent truncate">
                 {t.appTitle}
               </h1>
             </div>
-            <div className="flex gap-2">
+            <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
               {/* View Toggle */}
-              <div className="flex bg-gray-200 dark:bg-gray-800 rounded-lg p-1 mr-2">
+              <div className="flex bg-gray-200 dark:bg-gray-800 rounded-lg p-1 mr-1 sm:mr-2">
                 <button 
                   onClick={() => setView('list')}
                   className={`p-1.5 rounded-md transition-all ${view === 'list' ? 'bg-white dark:bg-gray-600 shadow-sm text-blue-600' : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'}`}
@@ -113,32 +125,40 @@ const App: React.FC = () => {
                 </button>
               </div>
 
-              <button onClick={() => setShowSettings(!showSettings)} className={`p-2 rounded-full transition-colors ${showSettings ? 'bg-blue-500/20 text-blue-600' : 'hover:bg-black/5 dark:hover:bg-white/10'}`}>
+              <button onClick={() => setShowSettings(!showSettings)} className={`p-1.5 sm:p-2 rounded-full transition-colors ${showSettings ? 'bg-blue-500/20 text-blue-600' : 'hover:bg-black/5 dark:hover:bg-white/10'}`}>
                  <Globe size={20} />
               </button>
-              <button onClick={toggleLanguage} className="p-2 rounded-full hover:bg-black/5 dark:hover:bg-white/10 transition-colors">
+              <button onClick={toggleLanguage} className="p-1.5 sm:p-2 rounded-full hover:bg-black/5 dark:hover:bg-white/10 transition-colors">
                 <Languages size={20} />
               </button>
-              <button onClick={toggleTheme} className="p-2 rounded-full hover:bg-black/5 dark:hover:bg-white/10 transition-colors">
+              <button onClick={toggleTheme} className="p-1.5 sm:p-2 rounded-full hover:bg-black/5 dark:hover:bg-white/10 transition-colors">
                 {theme === 'light' ? <Moon size={20} /> : <Sun size={20} />}
               </button>
             </div>
           </div>
 
           {/* Settings Dropdown */}
-          <div className={`overflow-hidden transition-all duration-300 ${showSettings ? 'max-h-20 opacity-100 mb-3' : 'max-h-0 opacity-0'}`}>
-             <div className="glass-panel p-3 rounded-xl flex items-center justify-between">
-                <span className="text-sm font-medium">{t.currency}</span>
-                <select 
-                  value={currency} 
-                  onChange={(e) => setCurrency(e.target.value as Currency)}
-                  className="p-1 rounded bg-white/50 dark:bg-black/20 border border-white/20 dark:border-white/10 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="INR">INR (₹)</option>
-                  <option value="USD">USD ($)</option>
-                  <option value="EUR">EUR (€)</option>
-                  <option value="GBP">GBP (£)</option>
-                </select>
+          <div className={`overflow-hidden transition-all duration-300 ${showSettings ? 'max-h-48 opacity-100 mb-3' : 'max-h-0 opacity-0'}`}>
+             <div className="glass-panel p-3 rounded-xl space-y-3">
+                <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium">{t.currency}</span>
+                    <select 
+                      value={currency} 
+                      onChange={(e) => setCurrency(e.target.value as Currency)}
+                      className="p-1 rounded bg-white/50 dark:bg-black/20 border border-white/20 dark:border-white/10 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                      <option value="INR">INR (₹)</option>
+                      <option value="USD">USD ($)</option>
+                      <option value="EUR">EUR (€)</option>
+                      <option value="GBP">GBP (£)</option>
+                    </select>
+                </div>
+
+                {showInstallButton && (
+                  <Button onClick={installApp} variant="primary" size="sm" fullWidth className="justify-center">
+                    <Smartphone size={16} className="mr-2" /> Install App
+                  </Button>
+                )}
              </div>
           </div>
 
@@ -235,6 +255,11 @@ const App: React.FC = () => {
                  <p className="text-lg font-medium text-gray-600 dark:text-gray-300 max-w-xs mx-auto leading-relaxed animate-in fade-in slide-in-from-bottom-4 duration-700">
                    {t.emptyState}
                  </p>
+                 {showInstallButton && (
+                    <Button onClick={installApp} variant="secondary" size="sm" className="mt-6">
+                      <Smartphone size={16} className="mr-2" /> Install App
+                    </Button>
+                 )}
               </div>
             ) : (
               filteredItems.map(item => (
