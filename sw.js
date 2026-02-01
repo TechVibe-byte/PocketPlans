@@ -1,4 +1,5 @@
-const CACHE_NAME = 'pocketplans-v2'; // Incremented version
+
+const CACHE_NAME = 'pocketplans-v3'; // Incremented version
 const PRECACHE_URLS = [
   '/',
   '/index.html',

@@ -26,7 +26,7 @@ interface ValidationErrors {
 }
 
 export const ItemForm: React.FC<ItemFormProps> = ({ initialData, isOpen, onClose, onSave, onFetchChange }) => {
-  const { t } = useSettings();
+  const { t, apiKey } = useSettings();
   const { showToast } = useToast();
   
   const [name, setName] = useState('');
@@ -101,16 +101,6 @@ export const ItemForm: React.FC<ItemFormProps> = ({ initialData, isOpen, onClose
   const handleAutoFill = async () => {
     if (!link) return;
 
-    // Check for API key selection bridge (Gemini 3 models requirement)
-    if (typeof window.aistudio !== 'undefined') {
-      const hasKey = await window.aistudio.hasSelectedApiKey();
-      if (!hasKey) {
-        await window.aistudio.openSelectKey();
-        // Proceed as we assume key selection was successful (Race condition mitigation)
-      }
-    }
-
-    const apiKey = process.env.API_KEY;
     if (!apiKey) {
       showToast(t.autoFillError, 'error');
       return;
@@ -130,8 +120,8 @@ export const ItemForm: React.FC<ItemFormProps> = ({ initialData, isOpen, onClose
     setFetchStatus(platform ? `Connecting to ${platform}...` : 'Initializing AI...');
 
     try {
-      // Re-initialize with the most up-to-date API key
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      // Initialize with the API key from settings
+      const ai = new GoogleGenAI({ apiKey });
       
       setFetchStatus(platform ? `Fetching details from ${platform}...` : 'Analyzing link content...');
       const response = await ai.models.generateContent({
@@ -183,12 +173,8 @@ export const ItemForm: React.FC<ItemFormProps> = ({ initialData, isOpen, onClose
       console.error("Auto-fill failed", e);
       let msg = "Could not auto-fill details.";
 
-      // Handle invalid project/API key errors by re-prompting
-      if (e.message?.includes('Requested entity was not found') || e.message?.includes('403')) {
-        msg = "Invalid API Key or Project. Re-linking...";
-        if (typeof window.aistudio !== 'undefined') {
-          await window.aistudio.openSelectKey();
-        }
+      if (e.message?.includes('403') || e.message?.includes('401')) {
+        msg = "Invalid API Key. Please check settings.";
       } else if (e.message?.includes('429')) {
         msg = "Too many requests. Please wait a moment.";
       } else if (e.message?.includes('503')) {
@@ -235,12 +221,8 @@ export const ItemForm: React.FC<ItemFormProps> = ({ initialData, isOpen, onClose
                 isValid = false;
             }
         } catch (e) {
-            if (!urlStr.startsWith('http')) {
-               // fixed later
-            } else {
-               newErrors[field] = t.validation.invalidUrl;
-               isValid = false;
-            }
+            newErrors[field] = t.validation.invalidUrl;
+            isValid = false;
         }
         if (urlStr.length > VALIDATION_LIMITS.URL_MAX_LENGTH) {
             newErrors[field] = t.validation.tooLong;

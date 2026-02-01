@@ -1,5 +1,5 @@
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo } from 'react';
 import { WishlistItem, Category, Status, FilterState, SortField, Priority, Currency } from './types';
 import { useWishlist } from './hooks/useWishlist';
 import { useSettings } from './context/SettingsContext';
@@ -10,9 +10,9 @@ import { AnalyticsDashboard } from './components/AnalyticsDashboard';
 import { ConfirmDialog } from './components/ConfirmDialog';
 import { Button } from './components/ui/Button';
 import { 
-  Plus, Search, Filter, Download, Upload,
+  Plus, Search, Download, Upload,
   Languages, Moon, Sun, LayoutGrid, ListFilter, Settings, PieChart, List,
-  WifiOff, Smartphone, Cpu, ExternalLink, CheckCircle
+  WifiOff, Smartphone, Filter, Key
 } from 'lucide-react';
 
 type ViewMode = 'list' | 'analytics';
@@ -20,7 +20,7 @@ type ViewMode = 'list' | 'analytics';
 const App: React.FC = () => {
   // Hooks & Context
   const { items, fileInputRef, saveItem, deleteItem, exportCSV, triggerImport, handleFileUpload } = useWishlist();
-  const { theme, toggleTheme, toggleLanguage, t, currency, setCurrency } = useSettings();
+  const { theme, toggleTheme, toggleLanguage, t, currency, setCurrency, apiKey, setApiKey } = useSettings();
   const { isOffline, showInstallButton, installApp } = usePWA();
 
   // Local UI State
@@ -32,31 +32,12 @@ const App: React.FC = () => {
   const [showFilters, setShowFilters] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [fetchingItemIds, setFetchingItemIds] = useState<Set<string>>(new Set());
-  const [isGeminiLinked, setIsGeminiLinked] = useState(false);
   const [filters, setFilters] = useState<FilterState>({
     category: 'All',
     priority: 'All',
     status: 'All'
   });
   const [sortField, setSortField] = useState<SortField>('createdAt');
-
-  // Check Gemini Connection Status
-  useEffect(() => {
-    const checkGemini = async () => {
-      if (typeof window.aistudio !== 'undefined') {
-        const linked = await window.aistudio.hasSelectedApiKey();
-        setIsGeminiLinked(linked);
-      }
-    };
-    checkGemini();
-  }, [showSettings]);
-
-  const handleLinkGemini = async () => {
-    if (typeof window.aistudio !== 'undefined') {
-      await window.aistudio.openSelectKey();
-      setIsGeminiLinked(true);
-    }
-  };
 
   // Logic
   const filteredItems = useMemo(() => {
@@ -169,7 +150,7 @@ const App: React.FC = () => {
           </div>
 
           {/* Settings Dropdown */}
-          <div className={`overflow-hidden transition-all duration-300 ${showSettings ? 'max-h-[30rem] opacity-100 mb-3' : 'max-h-0 opacity-0'}`}>
+          <div className={`overflow-hidden transition-all duration-300 ${showSettings ? 'max-h-[22rem] opacity-100 mb-3' : 'max-h-0 opacity-0'}`}>
              <div className="glass-panel p-4 rounded-xl space-y-4">
                 <div className="flex items-center justify-between">
                     <span className="text-sm font-bold uppercase tracking-wider text-gray-500">{t.currency}</span>
@@ -185,40 +166,18 @@ const App: React.FC = () => {
                     </select>
                 </div>
 
-                {/* Gemini Link Section */}
-                <div className="pt-2 border-t border-black/5 dark:border-white/10">
-                   <div className="flex items-center gap-2 mb-2">
-                      <Cpu size={16} className="text-blue-500" />
-                      <span className="text-sm font-bold uppercase tracking-wider text-gray-500">AI Features</span>
-                   </div>
-                   {isGeminiLinked ? (
-                     <div className="flex items-center justify-between p-3 rounded-xl bg-green-500/10 border border-green-500/20">
-                        <div className="flex items-center gap-2 text-green-600 dark:text-green-400 text-sm font-medium">
-                           <CheckCircle size={16} />
-                           {t.geminiLinked}
-                        </div>
-                        <button onClick={handleLinkGemini} className="text-xs text-blue-600 hover:underline">Change</button>
-                     </div>
-                   ) : (
-                     <div className="space-y-2">
-                        <Button onClick={handleLinkGemini} variant="primary" size="sm" fullWidth className="justify-center shadow-md">
-                           {t.linkGemini}
-                        </Button>
-                        <div className="flex items-center justify-between px-1">
-                           <span className="text-[10px] text-gray-500 leading-tight pr-4">
-                              {t.billingInfo}
-                           </span>
-                           <a 
-                             href="https://ai.google.dev/gemini-api/docs/billing" 
-                             target="_blank" 
-                             rel="noopener noreferrer"
-                             className="text-[10px] text-blue-500 flex items-center gap-1 hover:underline flex-shrink-0"
-                           >
-                             Docs <ExternalLink size={8} />
-                           </a>
-                        </div>
-                     </div>
-                   )}
+                <div className="flex flex-col gap-1">
+                   <span className="text-sm font-bold uppercase tracking-wider text-gray-500 flex items-center gap-1">
+                      <Key size={12} /> {t.apiKeyLabel}
+                   </span>
+                   <input 
+                      type="password"
+                      value={apiKey}
+                      onChange={(e) => setApiKey(e.target.value)}
+                      placeholder={t.apiKeyPlaceholder}
+                      className="p-2 rounded-lg bg-white/50 dark:bg-black/20 border border-white/20 dark:border-white/10 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                   />
+                   <p className="text-[10px] text-gray-400">{t.apiKeyHelp}</p>
                 </div>
 
                 {showInstallButton && (
