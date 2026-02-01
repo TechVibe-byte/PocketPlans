@@ -99,14 +99,22 @@ export const ItemForm: React.FC<ItemFormProps> = ({ initialData, isOpen, onClose
   };
 
   const handleAutoFill = async () => {
-    // The API key must be obtained exclusively from the environment variable process.env.API_KEY.
+    if (!link) return;
+
+    // Check for API key selection bridge (Gemini 3 models requirement)
+    if (typeof window.aistudio !== 'undefined') {
+      const hasKey = await window.aistudio.hasSelectedApiKey();
+      if (!hasKey) {
+        await window.aistudio.openSelectKey();
+        // Proceed as we assume key selection was successful (Race condition mitigation)
+      }
+    }
+
     const apiKey = process.env.API_KEY;
     if (!apiKey) {
       showToast(t.autoFillError, 'error');
       return;
     }
-    
-    if (!link) return;
     
     // Simple URL validation
     try {
@@ -122,7 +130,7 @@ export const ItemForm: React.FC<ItemFormProps> = ({ initialData, isOpen, onClose
     setFetchStatus(platform ? `Connecting to ${platform}...` : 'Initializing AI...');
 
     try {
-      // Always initialize with the pre-configured process.env.API_KEY.
+      // Re-initialize with the most up-to-date API key
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       
       setFetchStatus(platform ? `Fetching details from ${platform}...` : 'Analyzing link content...');
@@ -150,7 +158,6 @@ export const ItemForm: React.FC<ItemFormProps> = ({ initialData, isOpen, onClose
 
       setFetchStatus('Processing details...');
       
-      // Access text directly from response object (getter property, not a function).
       const text = response.text;
       if (!text) throw new Error("Empty response from AI");
 
@@ -176,14 +183,16 @@ export const ItemForm: React.FC<ItemFormProps> = ({ initialData, isOpen, onClose
       console.error("Auto-fill failed", e);
       let msg = "Could not auto-fill details.";
 
-      if (e.message?.includes('403') || e.message?.includes('API key')) {
-        msg = "Invalid API Key. Please check your settings.";
+      // Handle invalid project/API key errors by re-prompting
+      if (e.message?.includes('Requested entity was not found') || e.message?.includes('403')) {
+        msg = "Invalid API Key or Project. Re-linking...";
+        if (typeof window.aistudio !== 'undefined') {
+          await window.aistudio.openSelectKey();
+        }
       } else if (e.message?.includes('429')) {
         msg = "Too many requests. Please wait a moment.";
       } else if (e.message?.includes('503')) {
         msg = "AI Service temporarily unavailable.";
-      } else if (e.name === 'SyntaxError') {
-        msg = "Could not parse product details.";
       }
 
       showToast(msg, "error");

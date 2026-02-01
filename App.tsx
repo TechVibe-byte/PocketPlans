@@ -1,5 +1,5 @@
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { WishlistItem, Category, Status, FilterState, SortField, Priority, Currency } from './types';
 import { useWishlist } from './hooks/useWishlist';
 import { useSettings } from './context/SettingsContext';
@@ -12,7 +12,7 @@ import { Button } from './components/ui/Button';
 import { 
   Plus, Search, Filter, Download, Upload,
   Languages, Moon, Sun, LayoutGrid, ListFilter, Settings, PieChart, List,
-  WifiOff, Smartphone
+  WifiOff, Smartphone, Cpu, ExternalLink, CheckCircle
 } from 'lucide-react';
 
 type ViewMode = 'list' | 'analytics';
@@ -32,12 +32,31 @@ const App: React.FC = () => {
   const [showFilters, setShowFilters] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [fetchingItemIds, setFetchingItemIds] = useState<Set<string>>(new Set());
+  const [isGeminiLinked, setIsGeminiLinked] = useState(false);
   const [filters, setFilters] = useState<FilterState>({
     category: 'All',
     priority: 'All',
     status: 'All'
   });
   const [sortField, setSortField] = useState<SortField>('createdAt');
+
+  // Check Gemini Connection Status
+  useEffect(() => {
+    const checkGemini = async () => {
+      if (typeof window.aistudio !== 'undefined') {
+        const linked = await window.aistudio.hasSelectedApiKey();
+        setIsGeminiLinked(linked);
+      }
+    };
+    checkGemini();
+  }, [showSettings]);
+
+  const handleLinkGemini = async () => {
+    if (typeof window.aistudio !== 'undefined') {
+      await window.aistudio.openSelectKey();
+      setIsGeminiLinked(true);
+    }
+  };
 
   // Logic
   const filteredItems = useMemo(() => {
@@ -87,7 +106,6 @@ const App: React.FC = () => {
         type="file" 
         ref={fileInputRef} 
         onChange={handleFileUpload}
-        // Fixed casting error: Property 'value' does not exist on type 'HTMLImageElement'. Use HTMLInputElement.
         onClick={(e) => { (e.target as HTMLInputElement).value = ''; }}
         accept=".csv,text/csv,application/vnd.ms-excel,text/plain"
         className="hidden" 
@@ -151,14 +169,14 @@ const App: React.FC = () => {
           </div>
 
           {/* Settings Dropdown */}
-          <div className={`overflow-hidden transition-all duration-300 ${showSettings ? 'max-h-64 opacity-100 mb-3' : 'max-h-0 opacity-0'}`}>
-             <div className="glass-panel p-3 rounded-xl space-y-3">
+          <div className={`overflow-hidden transition-all duration-300 ${showSettings ? 'max-h-[30rem] opacity-100 mb-3' : 'max-h-0 opacity-0'}`}>
+             <div className="glass-panel p-4 rounded-xl space-y-4">
                 <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium">{t.currency}</span>
+                    <span className="text-sm font-bold uppercase tracking-wider text-gray-500">{t.currency}</span>
                     <select 
                       value={currency} 
                       onChange={(e) => setCurrency(e.target.value as Currency)}
-                      className="p-1 rounded bg-white/50 dark:bg-black/20 border border-white/20 dark:border-white/10 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="p-1.5 rounded-lg bg-white/50 dark:bg-black/20 border border-white/20 dark:border-white/10 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                     >
                       <option value="INR">INR (₹)</option>
                       <option value="USD">USD ($)</option>
@@ -167,8 +185,44 @@ const App: React.FC = () => {
                     </select>
                 </div>
 
+                {/* Gemini Link Section */}
+                <div className="pt-2 border-t border-black/5 dark:border-white/10">
+                   <div className="flex items-center gap-2 mb-2">
+                      <Cpu size={16} className="text-blue-500" />
+                      <span className="text-sm font-bold uppercase tracking-wider text-gray-500">AI Features</span>
+                   </div>
+                   {isGeminiLinked ? (
+                     <div className="flex items-center justify-between p-3 rounded-xl bg-green-500/10 border border-green-500/20">
+                        <div className="flex items-center gap-2 text-green-600 dark:text-green-400 text-sm font-medium">
+                           <CheckCircle size={16} />
+                           {t.geminiLinked}
+                        </div>
+                        <button onClick={handleLinkGemini} className="text-xs text-blue-600 hover:underline">Change</button>
+                     </div>
+                   ) : (
+                     <div className="space-y-2">
+                        <Button onClick={handleLinkGemini} variant="primary" size="sm" fullWidth className="justify-center shadow-md">
+                           {t.linkGemini}
+                        </Button>
+                        <div className="flex items-center justify-between px-1">
+                           <span className="text-[10px] text-gray-500 leading-tight pr-4">
+                              {t.billingInfo}
+                           </span>
+                           <a 
+                             href="https://ai.google.dev/gemini-api/docs/billing" 
+                             target="_blank" 
+                             rel="noopener noreferrer"
+                             className="text-[10px] text-blue-500 flex items-center gap-1 hover:underline flex-shrink-0"
+                           >
+                             Docs <ExternalLink size={8} />
+                           </a>
+                        </div>
+                     </div>
+                   )}
+                </div>
+
                 {showInstallButton && (
-                  <Button onClick={installApp} variant="primary" size="sm" fullWidth className="justify-center mt-2">
+                  <Button onClick={installApp} variant="secondary" size="sm" fullWidth className="justify-center mt-2">
                     <Smartphone size={16} className="mr-2" /> Install App
                   </Button>
                 )}
