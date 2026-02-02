@@ -6,7 +6,7 @@ import { useSettings } from '../context/SettingsContext';
 import { useToast } from '../context/ToastContext';
 import { Button } from './ui/Button';
 import { X, Paperclip, AlertCircle, Image as ImageIcon, Sparkles, Loader2 } from 'lucide-react';
-import { GoogleGenAI, Type } from "@google/genai";
+import { GoogleGenAI } from "@google/genai";
 
 interface ItemFormProps {
   initialData?: WishlistItem | null;
@@ -124,6 +124,7 @@ export const ItemForm: React.FC<ItemFormProps> = ({ initialData, isOpen, onClose
       const ai = new GoogleGenAI({ apiKey });
       
       setFetchStatus(platform ? `Fetching details from ${platform}...` : 'Analyzing link content...');
+      
       const response = await ai.models.generateContent({
         model: "gemini-3-flash-preview",
         contents: `Analyze this product URL from an Indian e-commerce site: ${link}. 
@@ -134,12 +135,13 @@ export const ItemForm: React.FC<ItemFormProps> = ({ initialData, isOpen, onClose
         config: {
           tools: [{ googleSearch: {} }],
           responseMimeType: "application/json",
+          // Using string literals for types to avoid import errors with enum
           responseSchema: {
-            type: Type.OBJECT,
+            type: "OBJECT" as any, 
             properties: {
-              name: { type: Type.STRING },
-              price: { type: Type.NUMBER },
-              platform: { type: Type.STRING }
+              name: { type: "STRING" as any },
+              price: { type: "NUMBER" as any },
+              platform: { type: "STRING" as any }
             },
             required: ["name", "price"]
           },
@@ -148,10 +150,17 @@ export const ItemForm: React.FC<ItemFormProps> = ({ initialData, isOpen, onClose
 
       setFetchStatus('Processing details...');
       
-      const text = response.text;
+      let text = response.text;
       if (!text) throw new Error("Empty response from AI");
 
+      // Clean Markdown if present (e.g., ```json { ... } ```)
+      text = text.trim();
+      if (text.startsWith('```')) {
+        text = text.replace(/^```(json)?/, '').replace(/```$/, '');
+      }
+
       const data = JSON.parse(text);
+      
       if (data) {
         if (data.name) setName(data.name);
         if (data.price) setPrice(data.price.toString());
@@ -173,12 +182,17 @@ export const ItemForm: React.FC<ItemFormProps> = ({ initialData, isOpen, onClose
       console.error("Auto-fill failed", e);
       let msg = "Could not auto-fill details.";
 
-      if (e.message?.includes('403') || e.message?.includes('401')) {
+      // Check for specific error codes in the message string or status property
+      const errorMessage = e.message || e.toString();
+      
+      if (errorMessage.includes('403') || errorMessage.includes('401') || errorMessage.includes('API key')) {
         msg = "Invalid API Key. Please check settings.";
-      } else if (e.message?.includes('429')) {
-        msg = "Too many requests. Please wait a moment.";
-      } else if (e.message?.includes('503')) {
+      } else if (errorMessage.includes('429') || errorMessage.includes('Too Many Requests') || errorMessage.includes('quota')) {
+        msg = "Usage limit exceeded (429). Please try again later.";
+      } else if (errorMessage.includes('503')) {
         msg = "AI Service temporarily unavailable.";
+      } else if (errorMessage.includes('JSON')) {
+        msg = "Failed to parse AI response. Try again.";
       }
 
       showToast(msg, "error");

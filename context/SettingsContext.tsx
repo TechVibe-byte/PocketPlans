@@ -60,8 +60,9 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const setCurrency = (c: Currency) => setCurrencyState(c);
   
   const setApiKey = (key: string) => {
-    setApiKeyState(key);
-    localStorage.setItem(API_KEY_STORAGE_KEY, key);
+    const cleanKey = key.trim();
+    setApiKeyState(cleanKey);
+    localStorage.setItem(API_KEY_STORAGE_KEY, cleanKey);
   };
 
   const t = TRANSLATIONS[lang];
