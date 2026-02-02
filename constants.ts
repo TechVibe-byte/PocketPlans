@@ -29,10 +29,6 @@ export const TRANSLATIONS = {
     importError: 'Failed to import. Check file format.',
     settings: 'Settings',
     currency: 'Currency',
-    apiKeyLabel: 'Gemini API Key',
-    apiKeyPlaceholder: 'Paste API Key here',
-    apiKeyHelp: 'Required for AI auto-fill.',
-    autoFillError: 'Please configure Gemini API Key in Settings.',
     autoFillSuccess: 'Product details fetched successfully!',
     fetching: 'Fetching...',
     analytics: {
@@ -113,10 +109,6 @@ export const TRANSLATIONS = {
     importError: 'దిగుమతి విఫలమైంది. ఫైల్ సరిగ్గా ఉందో లేదో చూడండి.',
     settings: 'సెట్టింగులు',
     currency: 'కరెన్సీ',
-    apiKeyLabel: 'Gemini API కీ',
-    apiKeyPlaceholder: 'API కీ ఇక్కడ అతికించండి',
-    apiKeyHelp: 'AI ఆటో-ఫిల్ కోసం అవసరం.',
-    autoFillError: 'దయచేసి సెట్టింగులలో Gemini API కీని అమర్చండి.',
     autoFillSuccess: 'వివరాలు సేకరించబడ్డాయి!',
     fetching: 'సేకరిస్తోంది...',
     analytics: {

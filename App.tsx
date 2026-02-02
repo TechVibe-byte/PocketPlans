@@ -12,7 +12,7 @@ import { Button } from './components/ui/Button';
 import { 
   Plus, Search, Download, Upload,
   Languages, Moon, Sun, LayoutGrid, ListFilter, Settings, PieChart, List,
-  WifiOff, Smartphone, Filter, Key
+  WifiOff, Smartphone, Filter
 } from 'lucide-react';
 
 type ViewMode = 'list' | 'analytics';
@@ -20,7 +20,7 @@ type ViewMode = 'list' | 'analytics';
 const App: React.FC = () => {
   // Hooks & Context
   const { items, fileInputRef, saveItem, deleteItem, exportCSV, triggerImport, handleFileUpload } = useWishlist();
-  const { theme, toggleTheme, toggleLanguage, t, currency, setCurrency, apiKey, setApiKey } = useSettings();
+  const { theme, toggleTheme, toggleLanguage, t, currency, setCurrency } = useSettings();
   const { isOffline, showInstallButton, installApp } = usePWA();
 
   // Local UI State
@@ -150,7 +150,7 @@ const App: React.FC = () => {
           </div>
 
           {/* Settings Dropdown */}
-          <div className={`overflow-hidden transition-all duration-300 ${showSettings ? 'max-h-[22rem] opacity-100 mb-3' : 'max-h-0 opacity-0'}`}>
+          <div className={`overflow-hidden transition-all duration-300 ${showSettings ? 'max-h-[12rem] opacity-100 mb-3' : 'max-h-0 opacity-0'}`}>
              <div className="glass-panel p-4 rounded-xl space-y-4">
                 <div className="flex items-center justify-between">
                     <span className="text-sm font-bold uppercase tracking-wider text-gray-500">{t.currency}</span>
@@ -164,20 +164,6 @@ const App: React.FC = () => {
                       <option value="EUR">EUR (€)</option>
                       <option value="GBP">GBP (£)</option>
                     </select>
-                </div>
-
-                <div className="flex flex-col gap-1">
-                   <span className="text-sm font-bold uppercase tracking-wider text-gray-500 flex items-center gap-1">
-                      <Key size={12} /> {t.apiKeyLabel}
-                   </span>
-                   <input 
-                      type="password"
-                      value={apiKey}
-                      onChange={(e) => setApiKey(e.target.value)}
-                      placeholder={t.apiKeyPlaceholder}
-                      className="p-2 rounded-lg bg-white/50 dark:bg-black/20 border border-white/20 dark:border-white/10 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                   />
-                   <p className="text-[10px] text-gray-400">{t.apiKeyHelp}</p>
                 </div>
 
                 {showInstallButton && (

@@ -5,8 +5,8 @@ import { VALIDATION_LIMITS, ALLOWED_PROTOCOLS } from '../constants';
 import { useSettings } from '../context/SettingsContext';
 import { useToast } from '../context/ToastContext';
 import { Button } from './ui/Button';
-import { X, Paperclip, AlertCircle, Image as ImageIcon, Sparkles, Loader2 } from 'lucide-react';
-import { GoogleGenAI } from "@google/genai";
+import { X, Paperclip, AlertCircle, Image as ImageIcon, Sparkles, Loader2, Zap } from 'lucide-react';
+// import { GoogleGenAI } from "@google/genai"; // AI removed for lightweight Microlink
 
 interface ItemFormProps {
   initialData?: WishlistItem | null;
@@ -26,7 +26,7 @@ interface ValidationErrors {
 }
 
 export const ItemForm: React.FC<ItemFormProps> = ({ initialData, isOpen, onClose, onSave, onFetchChange }) => {
-  const { t, apiKey } = useSettings();
+  const { t } = useSettings(); // Removed apiKey dependency
   const { showToast } = useToast();
   
   const [name, setName] = useState('');
@@ -85,13 +85,12 @@ export const ItemForm: React.FC<ItemFormProps> = ({ initialData, isOpen, onClose
   if (!isOpen) return null;
 
   const detectPlatformFromUrl = (url: string): string => {
-    const lowerUrl = url.toLowerCase();
-    if (lowerUrl.includes('amazon')) return 'Amazon';
-    if (lowerUrl.includes('flipkart')) return 'Flipkart';
-    if (lowerUrl.includes('myntra')) return 'Myntra';
-    if (lowerUrl.includes('ajio')) return 'Ajio';
     try {
       const hostname = new URL(url).hostname.replace('www.', '');
+      if (hostname.includes('amazon')) return 'Amazon';
+      if (hostname.includes('flipkart')) return 'Flipkart';
+      if (hostname.includes('myntra')) return 'Myntra';
+      if (hostname.includes('ajio')) return 'Ajio';
       return hostname.charAt(0).toUpperCase() + hostname.slice(1).split('.')[0];
     } catch {
       return '';
@@ -100,11 +99,6 @@ export const ItemForm: React.FC<ItemFormProps> = ({ initialData, isOpen, onClose
 
   const handleAutoFill = async () => {
     if (!link) return;
-
-    if (!apiKey) {
-      showToast(t.autoFillError, 'error');
-      return;
-    }
     
     // Simple URL validation
     try {
@@ -117,85 +111,98 @@ export const ItemForm: React.FC<ItemFormProps> = ({ initialData, isOpen, onClose
     setIsFetching(true);
     onFetchChange?.(true, initialData?.id);
     const platform = detectPlatformFromUrl(link);
-    setFetchStatus(platform ? `Connecting to ${platform}...` : 'Initializing AI...');
+    setFetchStatus(platform ? `Connecting to ${platform}...` : 'Fetching metadata...');
 
     try {
-      // Initialize with the API key from settings
-      const ai = new GoogleGenAI({ apiKey });
+      // Use Microlink API (Free, No Key required for low volume)
+      const encodedUrl = encodeURIComponent(link);
+      const response = await fetch(`https://api.microlink.io/?url=${encodedUrl}&palette=true&audio=false&video=false`);
       
-      setFetchStatus(platform ? `Fetching details from ${platform}...` : 'Analyzing link content...');
-      
-      const response = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
-        contents: `Analyze this product URL from an Indian e-commerce site: ${link}. 
-                   Extract the product Name and the current Price in INR.
-                   Return the price as a number (remove currency symbols like ₹).
-                   Identify the platform (Amazon, Flipkart, Myntra, Ajio, or Other).
-                   If you cannot access the specific page, perform a Google Search using the URL segments to find the exact product's current details in India.`,
-        config: {
-          tools: [{ googleSearch: {} }],
-          responseMimeType: "application/json",
-          // Using string literals for types to avoid import errors with enum
-          responseSchema: {
-            type: "OBJECT" as any, 
-            properties: {
-              name: { type: "STRING" as any },
-              price: { type: "NUMBER" as any },
-              platform: { type: "STRING" as any }
-            },
-            required: ["name", "price"]
-          },
-        },
-      });
-
-      setFetchStatus('Processing details...');
-      
-      let text = response.text;
-      if (!text) throw new Error("Empty response from AI");
-
-      // Clean Markdown if present (e.g., ```json { ... } ```)
-      text = text.trim();
-      if (text.startsWith('```')) {
-        text = text.replace(/^```(json)?/, '').replace(/```$/, '');
+      if (!response.ok) {
+        if (response.status === 429) throw new Error("Rate limit exceeded. Try again later.");
+        throw new Error("Failed to fetch link metadata");
       }
 
-      const data = JSON.parse(text);
-      
+      const json = await response.json();
+      const data = json.data;
+
       if (data) {
-        if (data.name) setName(data.name);
-        if (data.price) setPrice(data.price.toString());
-        
-        if (data.platform) {
-          const lowerPlat = data.platform.toLowerCase();
-          if (lowerPlat.includes('amazon')) setPlatformType(EcommercePlatform.Amazon);
-          else if (lowerPlat.includes('flipkart')) setPlatformType(EcommercePlatform.Flipkart);
-          else if (lowerPlat.includes('myntra')) setPlatformType(EcommercePlatform.Myntra);
-          else if (lowerPlat.includes('ajio')) setPlatformType(EcommercePlatform.Ajio);
-          else {
-             setPlatformType(EcommercePlatform.Other);
-             setCustomPlatform(data.platform);
-          }
+        let detailsFound = [];
+
+        // 1. Set Name
+        if (data.title) {
+          // Cleanup title (remove " | Amazon.in" etc.)
+          let cleanName = data.title.split('|')[0].split(' : ')[0].trim();
+          if (cleanName.length > 80) cleanName = cleanName.substring(0, 77) + '...';
+          setName(cleanName);
+          detailsFound.push("Name");
         }
-        showToast(t.autoFillSuccess, "success");
+
+        // 2. Set Image
+        if (data.image && data.image.url) {
+          setImageUrl(data.image.url);
+          detailsFound.push("Image");
+        }
+
+        // 3. Set Platform
+        if (data.publisher) {
+           const lowerPub = data.publisher.toLowerCase();
+           if (lowerPub.includes('amazon')) setPlatformType(EcommercePlatform.Amazon);
+           else if (lowerPub.includes('flipkart')) setPlatformType(EcommercePlatform.Flipkart);
+           else if (lowerPub.includes('myntra')) setPlatformType(EcommercePlatform.Myntra);
+           else if (lowerPub.includes('ajio')) setPlatformType(EcommercePlatform.Ajio);
+           else {
+              setPlatformType(EcommercePlatform.Other);
+              setCustomPlatform(data.publisher);
+           }
+        } else if (platform) {
+           // Fallback to URL detection
+           const lowerPlat = platform.toLowerCase();
+           if (lowerPlat.includes('amazon')) setPlatformType(EcommercePlatform.Amazon);
+           else if (lowerPlat.includes('flipkart')) setPlatformType(EcommercePlatform.Flipkart);
+           else if (lowerPlat.includes('myntra')) setPlatformType(EcommercePlatform.Myntra);
+           else if (lowerPlat.includes('ajio')) setPlatformType(EcommercePlatform.Ajio);
+        }
+
+        // 4. Try to Extract Price (Improved Regex)
+        // Check description first (often contains "Buy X for Rs Y"), then title
+        const textsToCheck = [data.description, data.title];
+        let priceFound = false;
+
+        // Matches: ₹ 1,200 | Rs. 1200 | INR 1200 | Rs 1200
+        // Does not require space after symbol
+        const priceRegex = /(?:₹|rs\.?|inr)\s*[:\.\-]?\s*(\d{1,3}(?:,\d{2,3})*(?:\.\d+)?)/i;
+
+        for (const text of textsToCheck) {
+            if (!text) continue;
+            const match = text.match(priceRegex);
+            if (match && match[1]) {
+                const extractedPrice = match[1].replace(/,/g, '');
+                // Basic sanity check: ensure it's not a year like 2023 or 2024 if it's strictly 4 digits and starts with 20
+                if (extractedPrice.length === 4 && (extractedPrice.startsWith('202'))) {
+                    continue; // Skip likely years
+                }
+                setPrice(extractedPrice);
+                priceFound = true;
+                break;
+            }
+        }
+
+        if (priceFound) {
+            detailsFound.push("Price");
+            showToast(`Auto-filled: ${detailsFound.join(', ')}`, "success");
+        } else {
+            // Inform user that Name/Image worked, but Price is missing (likely hidden by Amazon/Flipkart)
+            showToast(`Fetched ${detailsFound.join(', ')}. Price not found in metadata.`, "success");
+        }
+
+      } else {
+        throw new Error("No data found");
       }
+
     } catch (e: any) {
       console.error("Auto-fill failed", e);
-      let msg = "Could not auto-fill details.";
-
-      // Check for specific error codes in the message string or status property
-      const errorMessage = e.message || e.toString();
-      
-      if (errorMessage.includes('403') || errorMessage.includes('401') || errorMessage.includes('API key')) {
-        msg = "Invalid API Key. Please check settings.";
-      } else if (errorMessage.includes('429') || errorMessage.includes('Too Many Requests') || errorMessage.includes('quota')) {
-        msg = "Usage limit exceeded (429). Please try again later.";
-      } else if (errorMessage.includes('503')) {
-        msg = "AI Service temporarily unavailable.";
-      } else if (errorMessage.includes('JSON')) {
-        msg = "Failed to parse AI response. Try again.";
-      }
-
-      showToast(msg, "error");
+      showToast(e.message || "Could not fetch details. Please fill manually.", "error");
     } finally {
       setIsFetching(false);
       onFetchChange?.(false, initialData?.id);
@@ -325,7 +332,7 @@ export const ItemForm: React.FC<ItemFormProps> = ({ initialData, isOpen, onClose
                   className="px-3 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 text-white disabled:opacity-50 disabled:cursor-not-allowed shadow-md hover:shadow-lg transition-all flex items-center justify-center min-w-[3rem]"
                   title="Auto-fill details from Link"
                 >
-                  {isFetching ? <Loader2 size={18} className="animate-spin" /> : <Sparkles size={18} />}
+                  {isFetching ? <Loader2 size={18} className="animate-spin" /> : <Zap size={18} fill="currentColor" />}
                 </button>
              </div>
              {errors.link && <p className="mt-1 text-xs text-red-500 flex items-center gap-1"><AlertCircle size={10} /> {errors.link}</p>}

@@ -3,17 +3,13 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import { Language, Theme, Currency } from '../types';
 import { THEME_KEY, LANG_KEY, CURRENCY_KEY, TRANSLATIONS } from '../constants';
 
-const API_KEY_STORAGE_KEY = 'wishlog_api_key_v1';
-
 interface SettingsContextType {
   lang: Language;
   theme: Theme;
   currency: Currency;
-  apiKey: string;
   toggleLanguage: () => void;
   toggleTheme: () => void;
   setCurrency: (c: Currency) => void;
-  setApiKey: (key: string) => void;
   t: typeof TRANSLATIONS['en'];
 }
 
@@ -23,22 +19,18 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [lang, setLang] = useState<Language>('en');
   const [theme, setTheme] = useState<Theme>('light');
   const [currency, setCurrencyState] = useState<Currency>('INR');
-  const [apiKey, setApiKeyState] = useState<string>('');
 
   // Load settings on mount
   useEffect(() => {
     const savedTheme = localStorage.getItem(THEME_KEY) as Theme;
     const savedLang = localStorage.getItem(LANG_KEY) as Language;
     const savedCurrency = localStorage.getItem(CURRENCY_KEY) as Currency;
-    const savedApiKey = localStorage.getItem(API_KEY_STORAGE_KEY);
 
     if (savedTheme) setTheme(savedTheme);
     if (savedLang) setLang(savedLang);
     else if (navigator.language.startsWith('te')) setLang('te');
     
     if (savedCurrency) setCurrencyState(savedCurrency);
-    if (savedApiKey) setApiKeyState(savedApiKey);
-    else if (process.env.API_KEY) setApiKeyState(process.env.API_KEY);
   }, []);
 
   // Persist changes
@@ -59,12 +51,6 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const toggleTheme = () => setTheme(prev => prev === 'light' ? 'dark' : 'light');
   const setCurrency = (c: Currency) => setCurrencyState(c);
   
-  const setApiKey = (key: string) => {
-    const cleanKey = key.trim();
-    setApiKeyState(cleanKey);
-    localStorage.setItem(API_KEY_STORAGE_KEY, cleanKey);
-  };
-
   const t = TRANSLATIONS[lang];
 
   return (
@@ -72,11 +58,9 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       lang, 
       theme, 
       currency, 
-      apiKey,
       toggleLanguage, 
       toggleTheme, 
       setCurrency,
-      setApiKey,
       t 
     }}>
       {children}
