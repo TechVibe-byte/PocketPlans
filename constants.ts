@@ -29,6 +29,8 @@ export const TRANSLATIONS = {
     importError: 'Failed to import. Check file format.',
     settings: 'Settings',
     currency: 'Currency',
+    serpApiLabel: 'SerpApi Key (For better prices)',
+    serpApiDesc: 'Optional. Uses Google Search to find prices hidden by stores.',
     autoFillSuccess: 'Product details fetched successfully!',
     fetching: 'Fetching...',
     analytics: {
@@ -109,6 +111,8 @@ export const TRANSLATIONS = {
     importError: 'దిగుమతి విఫలమైంది. ఫైల్ సరిగ్గా ఉందో లేదో చూడండి.',
     settings: 'సెట్టింగులు',
     currency: 'కరెన్సీ',
+    serpApiLabel: 'SerpApi Key (మంచి ధరల కోసం)',
+    serpApiDesc: 'ఐచ్ఛికం. దాచిన ధరలను కనుగొనడానికి Google శోధనను ఉపయోగిస్తుంది.',
     autoFillSuccess: 'వివరాలు సేకరించబడ్డాయి!',
     fetching: 'సేకరిస్తోంది...',
     analytics: {
@@ -181,3 +185,4 @@ export const STORAGE_KEY = 'wishlog_items_v1';
 export const THEME_KEY = 'wishlog_theme_v1';
 export const LANG_KEY = 'wishlog_lang_v1';
 export const CURRENCY_KEY = 'wishlog_currency_v1';
+export const SERP_KEY = 'wishlog_serp_key_v1';

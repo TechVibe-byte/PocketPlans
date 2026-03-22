@@ -1,12 +1,12 @@
 
 import React, { useState, useEffect } from 'react';
+import { GoogleGenAI } from '@google/genai';
 import { WishlistItem, Category, Priority, Status, EcommercePlatform } from '../types';
 import { VALIDATION_LIMITS, ALLOWED_PROTOCOLS } from '../constants';
 import { useSettings } from '../context/SettingsContext';
 import { useToast } from '../context/ToastContext';
 import { Button } from './ui/Button';
-import { X, Paperclip, AlertCircle, Image as ImageIcon, Sparkles, Loader2, Zap } from 'lucide-react';
-// import { GoogleGenAI } from "@google/genai"; // AI removed for lightweight Microlink
+import { X, Paperclip, AlertCircle, Image as ImageIcon, Loader2, Zap, Search } from 'lucide-react';
 
 interface ItemFormProps {
   initialData?: WishlistItem | null;
@@ -26,7 +26,7 @@ interface ValidationErrors {
 }
 
 export const ItemForm: React.FC<ItemFormProps> = ({ initialData, isOpen, onClose, onSave, onFetchChange }) => {
-  const { t } = useSettings(); // Removed apiKey dependency
+  const { t, serpApiKey } = useSettings();
   const { showToast } = useToast();
   
   const [name, setName] = useState('');
@@ -97,10 +97,71 @@ export const ItemForm: React.FC<ItemFormProps> = ({ initialData, isOpen, onClose
     }
   };
 
+  /**
+   * Helper to parse price from string.
+   * Supports: ₹, Rs, INR, $, USD, €, EUR, £, GBP
+   */
+  const extractPriceFromText = (text: string, requireSymbol: boolean = true): number | null => {
+    if (!text) return null;
+    const cleanText = text.toLowerCase().trim();
+
+    // 0. Direct Number check (if symbol not required, usually from API fields)
+    if (!requireSymbol) {
+        const numeric = cleanText.replace(/[^\d.]/g, '');
+        const val = parseFloat(numeric);
+        if (!isNaN(val) && val > 0) return val;
+    }
+
+    // 1. Explicit patterns (High Confidence)
+    // Matches: "price: ₹100", "mrp: rs 100", "at ₹100", "@ ₹100"
+    const explicitPattern = /(?:price|mrp|deal|offer|cost|at|@)\s*[:\-\.]?\s*(?:₹|rs\.?|inr|\$|usd|€|eur|£|gbp)?\s*([\d,]+(?:\.\d+)?)/i;
+    const explicitMatch = cleanText.match(explicitPattern);
+    if (explicitMatch && explicitMatch[1]) {
+       return parseFloat(explicitMatch[1].replace(/,/g, ''));
+    }
+
+    // 2. Generic Currency pattern (Medium Confidence)
+    const currencyPattern = /(?:₹|rs\.?|inr|\$|usd|€|eur|£|gbp)\s*[:\.\-]?\s*([\d,]+(?:\.\d+)?)/gi;
+    const matches = [...text.matchAll(currencyPattern)];
+    
+    for (const match of matches) {
+        const priceStr = match[1].replace(/,/g, '');
+        const priceVal = parseFloat(priceStr);
+        const index = match.index || 0;
+        
+        // Context check: Avoid "Save ₹500", "Off ₹200"
+        const context = text.substring(Math.max(0, index - 25), index).toLowerCase();
+        if (context.includes('save') || context.includes('off') || context.includes('discount') || context.includes('emi') || context.includes('flat')) {
+            continue;
+        }
+        
+        return priceVal;
+    }
+
+    return null;
+  };
+
+  const fetchWithTimeout = async (url: string, timeout = 15000) => {
+      const controller = new AbortController();
+      const id = setTimeout(() => controller.abort(), timeout);
+      try {
+        const response = await fetch(url, { signal: controller.signal });
+        clearTimeout(id);
+        return response;
+      } catch (error: any) {
+        clearTimeout(id);
+        if (error.name === 'AbortError' || error.message?.includes('aborted')) {
+            const abortError = new Error("Request timed out. Please check your connection.");
+            abortError.name = 'AbortError';
+            throw abortError;
+        }
+        throw error;
+      }
+  };
+
   const handleAutoFill = async () => {
     if (!link) return;
     
-    // Simple URL validation
     try {
       new URL(link);
     } catch {
@@ -111,98 +172,163 @@ export const ItemForm: React.FC<ItemFormProps> = ({ initialData, isOpen, onClose
     setIsFetching(true);
     onFetchChange?.(true, initialData?.id);
     const platform = detectPlatformFromUrl(link);
-    setFetchStatus(platform ? `Connecting to ${platform}...` : 'Fetching metadata...');
+    setFetchStatus(platform ? `Connecting to ${platform}...` : 'Starting fetch...');
+
+    let dataFound = false;
+    let detailsFound: string[] = [];
+    let foundPrice: number | null = null;
+    let resolvedUrl = link;
+    let scrapedText = "";
 
     try {
-      // Use Microlink API (Free, No Key required for low volume)
       const encodedUrl = encodeURIComponent(link);
-      const response = await fetch(`https://api.microlink.io/?url=${encodedUrl}&palette=true&audio=false&video=false`);
       
-      if (!response.ok) {
-        if (response.status === 429) throw new Error("Rate limit exceeded. Try again later.");
-        throw new Error("Failed to fetch link metadata");
-      }
+      // --- PHASE 1: Basic Scraping (Microlink) ---
+      setFetchStatus('Fetching basic info...');
+      const microlinkRes = await fetchWithTimeout(`https://api.microlink.io/?url=${encodedUrl}&palette=true&audio=false&video=false`);
+      
+      if (microlinkRes.ok) {
+        const json = await microlinkRes.json();
+        const data = json.data;
 
-      const json = await response.json();
-      const data = json.data;
+        if (data) {
+            dataFound = true;
+            scrapedText = `${data.title || ''} ${data.description || ''}`;
+            
+            if (data.url && data.url !== link) {
+                resolvedUrl = data.url;
+            }
 
-      if (data) {
-        let detailsFound = [];
+            if (data.title) {
+                let cleanName = data.title.split('|')[0].split(' : ')[0].split(' - ')[0].trim();
+                if (cleanName.length > 80) cleanName = cleanName.substring(0, 77) + '...';
+                setName(cleanName);
+                if (!detailsFound.includes("Name")) detailsFound.push("Name");
+            }
+            
+            if (data.image && data.image.url) {
+                setImageUrl(data.image.url);
+                detailsFound.push("Image");
+            }
 
-        // 1. Set Name
-        if (data.title) {
-          // Cleanup title (remove " | Amazon.in" etc.)
-          let cleanName = data.title.split('|')[0].split(' : ')[0].trim();
-          if (cleanName.length > 80) cleanName = cleanName.substring(0, 77) + '...';
-          setName(cleanName);
-          detailsFound.push("Name");
-        }
-
-        // 2. Set Image
-        if (data.image && data.image.url) {
-          setImageUrl(data.image.url);
-          detailsFound.push("Image");
-        }
-
-        // 3. Set Platform
-        if (data.publisher) {
-           const lowerPub = data.publisher.toLowerCase();
-           if (lowerPub.includes('amazon')) setPlatformType(EcommercePlatform.Amazon);
-           else if (lowerPub.includes('flipkart')) setPlatformType(EcommercePlatform.Flipkart);
-           else if (lowerPub.includes('myntra')) setPlatformType(EcommercePlatform.Myntra);
-           else if (lowerPub.includes('ajio')) setPlatformType(EcommercePlatform.Ajio);
-           else {
-              setPlatformType(EcommercePlatform.Other);
-              setCustomPlatform(data.publisher);
-           }
-        } else if (platform) {
-           // Fallback to URL detection
-           const lowerPlat = platform.toLowerCase();
-           if (lowerPlat.includes('amazon')) setPlatformType(EcommercePlatform.Amazon);
-           else if (lowerPlat.includes('flipkart')) setPlatformType(EcommercePlatform.Flipkart);
-           else if (lowerPlat.includes('myntra')) setPlatformType(EcommercePlatform.Myntra);
-           else if (lowerPlat.includes('ajio')) setPlatformType(EcommercePlatform.Ajio);
-        }
-
-        // 4. Try to Extract Price (Improved Regex)
-        // Check description first (often contains "Buy X for Rs Y"), then title
-        const textsToCheck = [data.description, data.title];
-        let priceFound = false;
-
-        // Matches: ₹ 1,200 | Rs. 1200 | INR 1200 | Rs 1200
-        // Does not require space after symbol
-        const priceRegex = /(?:₹|rs\.?|inr)\s*[:\.\-]?\s*(\d{1,3}(?:,\d{2,3})*(?:\.\d+)?)/i;
-
-        for (const text of textsToCheck) {
-            if (!text) continue;
-            const match = text.match(priceRegex);
-            if (match && match[1]) {
-                const extractedPrice = match[1].replace(/,/g, '');
-                // Basic sanity check: ensure it's not a year like 2023 or 2024 if it's strictly 4 digits and starts with 20
-                if (extractedPrice.length === 4 && (extractedPrice.startsWith('202'))) {
-                    continue; // Skip likely years
+            if (data.publisher) {
+                const lowerPub = data.publisher.toLowerCase();
+                if (lowerPub.includes('amazon')) setPlatformType(EcommercePlatform.Amazon);
+                else if (lowerPub.includes('flipkart')) setPlatformType(EcommercePlatform.Flipkart);
+                else if (lowerPub.includes('myntra')) setPlatformType(EcommercePlatform.Myntra);
+                else if (lowerPub.includes('ajio')) setPlatformType(EcommercePlatform.Ajio);
+                else {
+                    setPlatformType(EcommercePlatform.Other);
+                    setCustomPlatform(data.publisher);
                 }
-                setPrice(extractedPrice);
-                priceFound = true;
-                break;
+            } else {
+                 const p = detectPlatformFromUrl(resolvedUrl);
+                 if (p) {
+                    if (p === 'Amazon') setPlatformType(EcommercePlatform.Amazon);
+                    else if (p === 'Flipkart') setPlatformType(EcommercePlatform.Flipkart);
+                    else setPlatformType(EcommercePlatform.Other); 
+                 }
+            }
+
+            const textsToCheck = [data.description, data.title];
+            for (const text of textsToCheck) {
+                const p = extractPriceFromText(text, true); 
+                if (p !== null) {
+                    foundPrice = p;
+                    break;
+                }
             }
         }
+      }
 
-        if (priceFound) {
-            detailsFound.push("Price");
-            showToast(`Auto-filled: ${detailsFound.join(', ')}`, "success");
-        } else {
-            // Inform user that Name/Image worked, but Price is missing (likely hidden by Amazon/Flipkart)
-            showToast(`Fetched ${detailsFound.join(', ')}. Price not found in metadata.`, "success");
-        }
+      // --- PHASE 2: Advanced Scraping (SerpApi) ---
+      if (serpApiKey && !foundPrice) {
+          setFetchStatus('Checking price sources (SerpApi)...');
+          const searchUrl = encodeURIComponent(resolvedUrl);
+          const serpRes = await fetchWithTimeout(`https://serpapi.com/search.json?engine=google&q=${searchUrl}&api_key=${serpApiKey}&num=1`);
 
+          if (serpRes.ok) {
+              const json = await serpRes.json();
+              let serpPriceVal: number | null = null;
+
+              if (json.product_result?.price) {
+                 serpPriceVal = extractPriceFromText(json.product_result.price.toString(), false);
+              }
+              else if (json.shopping_results?.[0]?.price) {
+                 serpPriceVal = extractPriceFromText(json.shopping_results[0].price.toString(), false);
+              }
+              else if (json.knowledge_graph?.price) {
+                 serpPriceVal = extractPriceFromText(json.knowledge_graph.price.toString(), false);
+              }
+              else if (json.organic_results?.[0]) {
+                  const organic = json.organic_results[0];
+                  if (organic.rich_snippet?.top?.detected_extensions?.price) {
+                      serpPriceVal = extractPriceFromText(organic.rich_snippet.top.detected_extensions.price.toString(), false);
+                  }
+                  else if (organic.price) {
+                      serpPriceVal = extractPriceFromText(organic.price.toString(), false);
+                  }
+                  else if (organic.snippet) {
+                      serpPriceVal = extractPriceFromText(organic.snippet, true);
+                  }
+                  else if (organic.title) {
+                      const titlePrice = extractPriceFromText(organic.title, true);
+                      if (titlePrice) serpPriceVal = titlePrice;
+                  }
+              }
+
+              if (serpPriceVal !== null) {
+                  foundPrice = serpPriceVal;
+                  dataFound = true;
+              }
+          }
+      }
+
+      // --- PHASE 3: Gemini Fallback (Extract from text) ---
+      if (!foundPrice && scrapedText && process.env.GEMINI_API_KEY) {
+          try {
+              setFetchStatus('Analyzing text with AI...');
+              const genAI = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+              const response = await genAI.models.generateContent({
+                  model: 'gemini-3-flash-preview',
+                  contents: `Extract the product price from this text. Return ONLY the number. If multiple prices exist, return the main one. If no price, return "null". Text: "${scrapedText}"`,
+              });
+              const text = response.text?.trim();
+              if (text && text !== 'null') {
+                  const p = parseFloat(text.replace(/[^0-9.]/g, ''));
+                  if (!isNaN(p) && p > 0) {
+                      foundPrice = p;
+                      dataFound = true;
+                  }
+              }
+          } catch (aiErr) {
+              console.warn("Gemini extraction failed", aiErr);
+          }
+      }
+
+      if (foundPrice !== null) {
+          setPrice(foundPrice.toString());
+          if (!detailsFound.includes("Price")) detailsFound.push("Price");
+      }
+
+      if (dataFound || detailsFound.length > 0) {
+        const msg = detailsFound.length > 0 
+            ? `Auto-filled: ${detailsFound.join(', ')}` 
+            : "Metadata found. Please verify price manually.";
+        showToast(msg, "success");
       } else {
         throw new Error("No data found");
       }
 
     } catch (e: any) {
       console.error("Auto-fill failed", e);
-      showToast(e.message || "Could not fetch details. Please fill manually.", "error");
+      if (e.name === 'AbortError' || e.message?.includes('aborted')) {
+         showToast("Request timed out. Please check your connection.", "error");
+      } else if (e.message === "No data found") {
+         showToast("Could not find product details automatically. Please fill manually.", "error");
+      } else {
+         showToast(e.message || "Could not fetch details. Please fill manually.", "error");
+      }
     } finally {
       setIsFetching(false);
       onFetchChange?.(false, initialData?.id);
@@ -222,8 +348,9 @@ export const ItemForm: React.FC<ItemFormProps> = ({ initialData, isOpen, onClose
       isValid = false;
     }
 
+    // Price validation: Allow empty (0), but if typed, must be valid.
     const numPrice = parseFloat(price);
-    if (isNaN(numPrice) || numPrice < 0 || numPrice > VALIDATION_LIMITS.PRICE_MAX) {
+    if (price !== '' && (isNaN(numPrice) || numPrice < 0 || numPrice > VALIDATION_LIMITS.PRICE_MAX)) {
       newErrors.price = t.validation.invalidPrice;
       isValid = false;
     }
@@ -309,7 +436,7 @@ export const ItemForm: React.FC<ItemFormProps> = ({ initialData, isOpen, onClose
 
         <form onSubmit={handleSubmit} className="p-5 space-y-5 flex-1">
           
-          {/* Link Field First to encourage Auto-fill */}
+          {/* Link Field & Auto-fill Button */}
           <div>
              <label className="block text-xs font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-1.5">{t.labels.link}</label>
              <div className="relative flex gap-2">
@@ -325,16 +452,21 @@ export const ItemForm: React.FC<ItemFormProps> = ({ initialData, isOpen, onClose
                       placeholder="https://www.amazon.in/..."
                     />
                 </div>
+                
+                {/* Auto-fill Button */}
                 <button 
                   type="button"
                   onClick={handleAutoFill}
                   disabled={!link || isFetching}
-                  className="px-3 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 text-white disabled:opacity-50 disabled:cursor-not-allowed shadow-md hover:shadow-lg transition-all flex items-center justify-center min-w-[3rem]"
+                  className="px-4 py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white shadow-lg shadow-blue-500/30 disabled:opacity-50 disabled:shadow-none transition-all flex items-center gap-2 font-medium text-sm min-w-fit"
                   title="Auto-fill details from Link"
                 >
-                  {isFetching ? <Loader2 size={18} className="animate-spin" /> : <Zap size={18} fill="currentColor" />}
+                  {isFetching ? <Loader2 size={16} className="animate-spin" /> : <Zap size={16} fill="currentColor" />}
+                  <span className="hidden sm:inline">Auto-fill</span>
                 </button>
              </div>
+             
+             {/* Errors & Status Feedback */}
              {errors.link && <p className="mt-1 text-xs text-red-500 flex items-center gap-1"><AlertCircle size={10} /> {errors.link}</p>}
              {isFetching && !errors.link && (
                 <p className="mt-2 text-xs text-blue-600 dark:text-blue-400 flex items-center gap-2 animate-pulse font-medium">

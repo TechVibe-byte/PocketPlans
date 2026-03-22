@@ -20,7 +20,7 @@ type ViewMode = 'list' | 'analytics';
 const App: React.FC = () => {
   // Hooks & Context
   const { items, fileInputRef, saveItem, deleteItem, exportCSV, triggerImport, handleFileUpload } = useWishlist();
-  const { theme, toggleTheme, toggleLanguage, t, currency, setCurrency } = useSettings();
+  const { theme, toggleTheme, toggleLanguage, t, currency, setCurrency, serpApiKey, setSerpApiKey } = useSettings();
   const { isOffline, showInstallButton, installApp } = usePWA();
 
   // Local UI State
@@ -150,7 +150,7 @@ const App: React.FC = () => {
           </div>
 
           {/* Settings Dropdown */}
-          <div className={`overflow-hidden transition-all duration-300 ${showSettings ? 'max-h-[12rem] opacity-100 mb-3' : 'max-h-0 opacity-0'}`}>
+          <div className={`overflow-hidden transition-all duration-300 ${showSettings ? 'max-h-[22rem] opacity-100 mb-3' : 'max-h-0 opacity-0'}`}>
              <div className="glass-panel p-4 rounded-xl space-y-4">
                 <div className="flex items-center justify-between">
                     <span className="text-sm font-bold uppercase tracking-wider text-gray-500">{t.currency}</span>
@@ -164,6 +164,23 @@ const App: React.FC = () => {
                       <option value="EUR">EUR (€)</option>
                       <option value="GBP">GBP (£)</option>
                     </select>
+                </div>
+                
+                {/* SerpApi Input */}
+                <div className="pt-2 border-t border-black/5 dark:border-white/10">
+                    <label className="block text-xs font-bold uppercase tracking-wider text-gray-500 mb-1.5">
+                        {t.serpApiLabel}
+                    </label>
+                    <input 
+                        type="password"
+                        value={serpApiKey}
+                        onChange={(e) => setSerpApiKey(e.target.value)}
+                        placeholder="Paste your key here..."
+                        className="w-full p-2 rounded-lg bg-white/50 dark:bg-black/20 border border-white/20 dark:border-white/10 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                    <p className="text-[10px] text-gray-400 mt-1">
+                        {t.serpApiDesc}
+                    </p>
                 </div>
 
                 {showInstallButton && (
